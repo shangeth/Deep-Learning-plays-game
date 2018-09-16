@@ -1,35 +1,69 @@
-import numpy as np
-import cv2
+
+import ctypes
 import time
-from mss import mss
-from PIL import Image
-import pyautogui
 
-def process_img(orig_img):
-	processed_img = cv2.cvtColor(orig_img, cv2.COLOR_BGR2GRAY)
-	processed_img = cv2.Canny(processed_img, threshold1=200, threshold2=300)
-	return processed_img
+SendInput = ctypes.windll.user32.SendInput
 
 
+W = 0x11
+A = 0x1E
+S = 0x1F
+D = 0x20
 
+NP_2 = 0x50
+NP_4 = 0x4B
+NP_6 = 0x4D
+NP_8 = 0x48
 
+# C struct redefinitions 
+PUL = ctypes.POINTER(ctypes.c_ulong)
+class KeyBdInput(ctypes.Structure):
+    _fields_ = [("wVk", ctypes.c_ushort),
+                ("wScan", ctypes.c_ushort),
+                ("dwFlags", ctypes.c_ulong),
+                ("time", ctypes.c_ulong),
+                ("dwExtraInfo", PUL)]
 
-box = { "top": 45, "left": 0, "width": 500, "height": 340}
-sct = mss()
+class HardwareInput(ctypes.Structure):
+    _fields_ = [("uMsg", ctypes.c_ulong),
+                ("wParamL", ctypes.c_short),
+                ("wParamH", ctypes.c_ushort)]
 
-while True:
+class MouseInput(ctypes.Structure):
+    _fields_ = [("dx", ctypes.c_long),
+                ("dy", ctypes.c_long),
+                ("mouseData", ctypes.c_ulong),
+                ("dwFlags", ctypes.c_ulong),
+                ("time",ctypes.c_ulong),
+                ("dwExtraInfo", PUL)]
 
-    t = time.time()
-    sct.get_pixels(box)
-    image = Image.frombytes('RGB', (sct.width, sct.height), sct.image)
-    image=np.array(image)
-    new_screen = process_img(image)
+class Input_I(ctypes.Union):
+    _fields_ = [("ki", KeyBdInput),
+                 ("mi", MouseInput),
+                 ("hi", HardwareInput)]
 
-    # cv2.imshow('test', image)
-    cv2.imshow('window', new_screen)
-    print('fps: {}'.format(1/(time.time()-t)))
+class Input(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_ulong),
+                ("ii", Input_I)]
 
-    if cv2.waitKey(25) & 0xFF == ord('q'):
-        cv2.destroyAllWindows()
-        break
-        
+# Actuals Functions
+
+def PressKey(hexKeyCode):
+    extra = ctypes.c_ulong(0)
+    ii_ = Input_I()
+    ii_.ki = KeyBdInput( 0, hexKeyCode, 0x0008, 0, ctypes.pointer(extra) )
+    x = Input( ctypes.c_ulong(1), ii_ )
+    ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+
+def ReleaseKey(hexKeyCode):
+    extra = ctypes.c_ulong(0)
+    ii_ = Input_I()
+    ii_.ki = KeyBdInput( 0, hexKeyCode, 0x0008 | 0x0002, 0, ctypes.pointer(extra) )
+    x = Input( ctypes.c_ulong(1), ii_ )
+    ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+
+if __name__ == '__main__':
+    PressKey(0x11)
+    time.sleep(1)
+    ReleaseKey(0x11)
+    time.sleep(1)
